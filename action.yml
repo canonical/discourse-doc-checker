@@ -1,0 +1,73 @@
+name: 'Documentation Checker'
+description: 'Check documentation format by converting Contents to Navigation tables and comparing with Discourse'
+author: 'Canonical'
+
+inputs:
+  docs-path:
+    description: 'Path to documentation directory'
+    required: false
+    default: 'docs'
+  discourse-url:
+    description: 'Discourse instance URL'
+    required: false
+    default: 'https://discourse.charmhub.io'
+  discourse-api-key:
+    description: 'Discourse API key'
+    required: false
+    default: ''
+  discourse-api-user:
+    description: 'Discourse API username'
+    required: false
+    default: 'system'
+  working-directory:
+    description: 'Working directory'
+    required: false
+    default: '.'
+
+# outputs:
+#   result:
+#     description: 'Result of the documentation check (success/failure)'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Check if docs directory exists
+      id: docs-check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [[ -d "${{ inputs.docs-path }}" ]]; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "Warning: Documentation directory '${{ inputs.docs-path }}' not found"
+        fi
+
+    - name: Run documentation format check
+      if: steps.docs-check.outputs.exists == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DISCOURSE_URL: ${{ inputs.discourse-url }}
+        DISCOURSE_API_KEY: ${{ inputs.discourse-api-key }}
+        DISCOURSE_API_USER: ${{ inputs.discourse-api-user }}
+        DOCS_PATH_GLOB: ${{ inputs.docs-path }}
+        CHARM_DIR: ${{ inputs.working-directory }}
+      run: |
+        echo "Running documentation format check..."
+        python ${{ github.action_path }}/check_docs.py
+
+branding:
+  icon: 'file-text'
+  color: 'blue'

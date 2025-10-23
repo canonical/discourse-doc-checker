@@ -1,0 +1,36 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    name: Check Documentation Format
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run documentation checker
+        uses: canonical/doc-checker@v1
+        with:
+          docs-path: 'docs'
+          discourse-url: 'https://discourse.charmhub.io'
+          discourse-api-key: ${{ secrets.DISCOURSE_API_KEY }}
+          discourse-api-user: ${{ secrets.DISCOURSE_API_USER }}
+          
+      - name: Comment on PR if failed
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '📋 Documentation format check failed. Please review the documentation format and ensure it matches the expected structure.'
+            })
