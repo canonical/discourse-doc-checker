@@ -6,6 +6,7 @@ A reusable GitHub Action that checks documentation format by converting Contents
 
 Add this action to any repository with documentation:
 
+### For Pull Requests
 ```yaml
 name: Check Documentation
 
@@ -28,8 +29,39 @@ jobs:
           # Optional: Create an issue with results
           create-issue: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-title: 'Documentation Check Failed'
+          issue-title: 'Documentation Check Failed - PR #${{ github.event.number }}'
           issue-labels: 'documentation'
+```
+
+### For Periodic/Scheduled Runs
+```yaml
+name: Periodic Documentation Check
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: canonical/discourse-doc-checker@main
+        with:
+          docs-path: 'docs'
+          discourse-url: 'https://discourse.charmhub.io'
+          discourse-api-key: ${{ secrets.DISCOURSE_API_KEY }}
+          discourse-api-user: ${{ secrets.DISCOURSE_API_USER }}
+          # Issue settings for periodic runs
+          create-issue: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-title: 'Documentation Check Failed'  # Consistent title for duplicate detection
+          issue-labels: 'documentation'
+          update-existing-issue: 'true'  # Update existing issues instead of creating duplicates
 ```
 
 ## Inputs
@@ -45,6 +77,7 @@ jobs:
 | `create-issue` | Whether to create an issue with the output (true/false) | No | `false` |
 | `issue-title` | Title for the issue to be created | No | `Documentation Check Failed` |
 | `issue-labels` | Comma-separated list of labels to add to the issue (labels must exist in target repo) | No | `` |
+| `update-existing-issue` | Whether to update existing open issue instead of creating a new one (true/false) | No | `false` |
 
 ## What it does
 
@@ -93,10 +126,18 @@ The issue will include:
 
 Issues are **not created** for successful runs where no differences are found.
 
+### Preventing Duplicate Issues
+
+For periodic runs (like scheduled workflows), you can prevent creating multiple issues for the same problem:
+
+- **Default behavior**: The action checks if an open issue with the same title already exists and skips creation if found
+- **Update existing issues**: Set `update-existing-issue: 'true'` to add new results as comments to existing open issues instead of creating duplicates
+
 **Notes**: 
 - The `GITHUB_TOKEN` secret is automatically available in GitHub Actions and has the necessary permissions to create issues in the same repository.
 - If the specified labels don't exist in the target repository, the action will create the issue without labels rather than failing.
 - Make sure the labels you specify in `issue-labels` actually exist in your repository, or use common labels like `documentation`, `bug`, etc.
+- For periodic runs, consider using a consistent `issue-title` (without dynamic parts like branch names) to ensure proper duplicate detection.
 
 ## Repository Structure
 

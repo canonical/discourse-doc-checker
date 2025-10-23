@@ -39,6 +39,10 @@ inputs:
     description: 'Comma-separated list of labels to add to the issue (labels must exist in the target repository)'
     required: false
     default: ''
+  update-existing-issue:
+    description: 'Whether to update existing open issue instead of creating a new one (true/false)'
+    required: false
+    default: 'true'
 
 # outputs:
 #   result:
@@ -111,6 +115,26 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
+        # Check if an open issue with the same title already exists
+        issue_title="${{ inputs.issue-title }}"
+        existing_issue=$(gh issue list --repo "${{ github.repository }}" --state open --search "\"$issue_title\"" --json number,title --jq '.[] | select(.title == "'"$issue_title"'") | .number' | head -1)
+        
+        if [[ -n "$existing_issue" ]]; then
+          echo "Open issue #$existing_issue with title '$issue_title' already exists."
+          
+          if [[ "${{ inputs.update-existing-issue }}" == "true" ]]; then
+            echo "Updating existing issue #$existing_issue with new results..."
+            update_existing_issue=true
+            issue_number="$existing_issue"
+          else
+            echo "Skipping issue creation (set update-existing-issue to 'true' to update existing issues)."
+            echo "Existing issue URL: ${{ github.server_url }}/${{ github.repository }}/issues/$existing_issue"
+            exit 0
+          fi
+        else
+          update_existing_issue=false
+        fi
+        
         # Read the output from the file
         output_file="${{ steps.doc-check.outputs.output_file }}"
         
@@ -170,31 +194,51 @@ runs:
         *This issue was automatically created by the Documentation Checker action when problems were detected.*
         ISSUE_FOOTER
         
-        # Create the issue using GitHub CLI
-        if [[ -n "${{ inputs.issue-labels }}" ]]; then
-          # Try to create the issue with labels first
-          if ! gh issue create \
-            --title "${{ inputs.issue-title }}" \
-            --body-file "$issue_body_file" \
-            --label "${{ inputs.issue-labels }}" \
-            --repo "${{ github.repository }}" 2>/dev/null; then
-            
-            echo "Failed to create issue with labels (labels may not exist), creating without labels..."
-            # If that fails (likely due to non-existent labels), create without labels
-            gh issue create \
-              --title "${{ inputs.issue-title }}" \
-              --body-file "$issue_body_file" \
-              --repo "${{ github.repository }}"
-          fi
-        else
-          # No labels specified, create issue without labels
-          gh issue create \
-            --title "${{ inputs.issue-title }}" \
+        # Create or update the issue using GitHub CLI
+        if [[ "$update_existing_issue" == "true" ]]; then
+          # Update existing issue
+          echo "## Updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$issue_body_file"
+          
+          gh issue comment "$issue_number" \
             --body-file "$issue_body_file" \
             --repo "${{ github.repository }}"
+          
+          echo "Issue #$issue_number updated successfully"
+          echo "Issue URL: ${{ github.server_url }}/${{ github.repository }}/issues/$issue_number"
+        else
+          # Create new issue
+          if [[ -n "${{ inputs.issue-labels }}" ]]; then
+            # Try to create the issue with labels first
+            if ! gh issue create \
+              --title "${{ inputs.issue-title }}" \
+              --body-file "$issue_body_file" \
+              --label "${{ inputs.issue-labels }}" \
+              --repo "${{ github.repository }}" 2>/dev/null; then
+              
+              echo "Failed to create issue with labels (labels may not exist), creating without labels..."
+              # If that fails (likely due to non-existent labels), create without labels
+              issue_url=$(gh issue create \
+                --title "${{ inputs.issue-title }}" \
+                --body-file "$issue_body_file" \
+                --repo "${{ github.repository }}")
+            else
+              issue_url=$(gh issue create \
+                --title "${{ inputs.issue-title }}" \
+                --body-file "$issue_body_file" \
+                --label "${{ inputs.issue-labels }}" \
+                --repo "${{ github.repository }}")
+            fi
+          else
+            # No labels specified, create issue without labels
+            issue_url=$(gh issue create \
+              --title "${{ inputs.issue-title }}" \
+              --body-file "$issue_body_file" \
+              --repo "${{ github.repository }}")
+          fi
+          
+          echo "Issue created successfully"
+          echo "Issue URL: $issue_url"
         fi
-        
-        echo "Issue created successfully"
 
 branding:
   icon: 'file-text'
