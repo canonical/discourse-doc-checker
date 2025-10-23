@@ -174,15 +174,20 @@ runs:
         
         ## Details
         
-        \`\`\`
+        <details>
+        <summary>Documentation Check Output</summary>
+        
+        <pre><code>
         ISSUE_BODY
         
-        # Append the actual output
+        # Append the actual output (HTML pre/code blocks handle backticks safely)
         cat "$output_file" >> "$issue_body_file"
         
         # Close the code block and add footer
         cat >> "$issue_body_file" << 'ISSUE_FOOTER'
-        ```
+        </code></pre>
+        
+        </details>
         
         ## Next Steps
         
