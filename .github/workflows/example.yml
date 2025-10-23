@@ -29,7 +29,7 @@ jobs:
           create-issue: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           issue-title: 'Documentation Check Failed - ${{ github.ref_name }}'
-          issue-labels: 'documentation,automated'
+          issue-labels: 'documentation'
           
       - name: Comment on PR if failed
         if: failure() && github.event_name == 'pull_request'

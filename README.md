@@ -29,7 +29,7 @@ jobs:
           create-issue: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           issue-title: 'Documentation Check Failed'
-          issue-labels: 'documentation,bug'
+          issue-labels: 'documentation'
 ```
 
 ## Inputs
@@ -44,7 +44,7 @@ jobs:
 | `github-token` | GitHub token for creating issues | No | `` |
 | `create-issue` | Whether to create an issue with the output (true/false) | No | `false` |
 | `issue-title` | Title for the issue to be created | No | `Documentation Check Failed` |
-| `issue-labels` | Comma-separated list of labels to add to the issue | No | `documentation` |
+| `issue-labels` | Comma-separated list of labels to add to the issue (labels must exist in target repo) | No | `` |
 
 ## What it does
 
@@ -93,7 +93,10 @@ The issue will include:
 
 Issues are **not created** for successful runs where no differences are found.
 
-**Note**: The `GITHUB_TOKEN` secret is automatically available in GitHub Actions and has the necessary permissions to create issues in the same repository.
+**Notes**: 
+- The `GITHUB_TOKEN` secret is automatically available in GitHub Actions and has the necessary permissions to create issues in the same repository.
+- If the specified labels don't exist in the target repository, the action will create the issue without labels rather than failing.
+- Make sure the labels you specify in `issue-labels` actually exist in your repository, or use common labels like `documentation`, `bug`, etc.
 
 ## Repository Structure
 

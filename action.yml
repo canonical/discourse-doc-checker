@@ -36,9 +36,9 @@ inputs:
     required: false
     default: 'Documentation Check Failed'
   issue-labels:
-    description: 'Comma-separated list of labels to add to the issue'
+    description: 'Comma-separated list of labels to add to the issue (labels must exist in the target repository)'
     required: false
-    default: 'documentation'
+    default: ''
 
 # outputs:
 #   result:
@@ -171,11 +171,28 @@ runs:
         ISSUE_FOOTER
         
         # Create the issue using GitHub CLI
-        gh issue create \
-          --title "${{ inputs.issue-title }}" \
-          --body-file "$issue_body_file" \
-          --label "${{ inputs.issue-labels }}" \
-          --repo "${{ github.repository }}"
+        if [[ -n "${{ inputs.issue-labels }}" ]]; then
+          # Try to create the issue with labels first
+          if ! gh issue create \
+            --title "${{ inputs.issue-title }}" \
+            --body-file "$issue_body_file" \
+            --label "${{ inputs.issue-labels }}" \
+            --repo "${{ github.repository }}" 2>/dev/null; then
+            
+            echo "Failed to create issue with labels (labels may not exist), creating without labels..."
+            # If that fails (likely due to non-existent labels), create without labels
+            gh issue create \
+              --title "${{ inputs.issue-title }}" \
+              --body-file "$issue_body_file" \
+              --repo "${{ github.repository }}"
+          fi
+        else
+          # No labels specified, create issue without labels
+          gh issue create \
+            --title "${{ inputs.issue-title }}" \
+            --body-file "$issue_body_file" \
+            --repo "${{ github.repository }}"
+        fi
         
         echo "Issue created successfully"
 
