@@ -1,5 +1,5 @@
 name: 'Documentation Checker'
-description: 'Check documentation format by converting Contents to Navigation tables and comparing with Discourse'
+description: 'Check documentation differences between Discourse and local files.'
 author: 'Canonical'
 
 inputs:
@@ -23,6 +23,22 @@ inputs:
     description: 'Working directory'
     required: false
     default: '.'
+  github-token:
+    description: 'GitHub token for creating issues'
+    required: false
+    default: ''
+  create-issue:
+    description: 'Whether to create an issue with the output (true/false)'
+    required: false
+    default: 'true'
+  issue-title:
+    description: 'Title for the issue to be created'
+    required: false
+    default: 'Documentation Check Failed'
+  issue-labels:
+    description: 'Comma-separated list of labels to add to the issue'
+    required: false
+    default: 'documentation'
 
 # outputs:
 #   result:
@@ -55,6 +71,7 @@ runs:
         fi
 
     - name: Run documentation format check
+      id: doc-check
       if: steps.docs-check.outputs.exists == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
@@ -66,7 +83,101 @@ runs:
         CHARM_DIR: ${{ inputs.working-directory }}
       run: |
         echo "Running documentation format check..."
-        python ${{ github.action_path }}/check_docs.py
+        
+        # Capture output to both stdout and a file
+        output_file="${{ runner.temp }}/doc_check_output.txt"
+        
+        # Run the check and capture both stdout and stderr
+        if python ${{ github.action_path }}/check_docs.py > "$output_file" 2>&1; then
+          echo "check_result=success" >> "$GITHUB_OUTPUT"
+          exit_code=0
+        else
+          echo "check_result=failure" >> "$GITHUB_OUTPUT"
+          exit_code=$?
+        fi
+        
+        # Display the output
+        cat "$output_file"
+        
+        # Store the output for potential issue creation
+        echo "output_file=$output_file" >> "$GITHUB_OUTPUT"
+        
+        # Exit with the original exit code
+        exit $exit_code
+
+    - name: Create issue with results
+      if: inputs.create-issue == 'true' && inputs.github-token != '' && (failure() || steps.doc-check.outputs.check_result == 'failure' || steps.docs-check.outputs.exists == 'false')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        # Read the output from the file
+        output_file="${{ steps.doc-check.outputs.output_file }}"
+        
+        # Default output file if the previous step didn't run
+        if [[ ! -f "$output_file" ]]; then
+          output_file="${{ runner.temp }}/doc_check_output.txt"
+          if [[ "${{ steps.docs-check.outputs.exists }}" == "false" ]]; then
+            echo "Documentation directory '${{ inputs.docs-path }}' not found" > "$output_file"
+          else
+            echo "Documentation check was skipped or failed to generate output" > "$output_file"
+          fi
+        fi
+        
+        # Prepare issue body
+        issue_body_file="${{ runner.temp }}/issue_body.md"
+        
+        # Determine the issue type
+        issue_type="Unknown"
+        if [[ "${{ steps.docs-check.outputs.exists }}" == "false" ]]; then
+          issue_type="Missing Documentation Directory"
+        elif [[ "${{ steps.doc-check.outputs.check_result }}" == "failure" ]]; then
+          issue_type="Documentation Differences Found"
+        else
+          issue_type="Documentation Check Failed"
+        fi
+        
+        # Create issue body
+        cat > "$issue_body_file" << ISSUE_BODY
+        # Documentation Check Issue: $issue_type
+        
+        **Repository:** ${{ github.repository }}
+        **Branch:** ${{ github.ref_name }}
+        **Commit:** ${{ github.sha }}
+        **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        **Issue Type:** $issue_type
+        **Status:** ${{ steps.doc-check.outputs.check_result || 'skipped' }}
+        
+        ## Details
+        
+        \`\`\`
+        ISSUE_BODY
+        
+        # Append the actual output
+        cat "$output_file" >> "$issue_body_file"
+        
+        # Close the code block and add footer
+        cat >> "$issue_body_file" << 'ISSUE_FOOTER'
+        ```
+        
+        ## Next Steps
+        
+        - Review the output above to understand what documentation issues were found
+        - Check the workflow run link for more detailed logs
+        - Fix the documentation issues and push changes to resolve this issue
+        
+        ---
+        *This issue was automatically created by the Documentation Checker action when problems were detected.*
+        ISSUE_FOOTER
+        
+        # Create the issue using GitHub CLI
+        gh issue create \
+          --title "${{ inputs.issue-title }}" \
+          --body-file "$issue_body_file" \
+          --label "${{ inputs.issue-labels }}" \
+          --repo "${{ github.repository }}"
+        
+        echo "Issue created successfully"
 
 branding:
   icon: 'file-text'
