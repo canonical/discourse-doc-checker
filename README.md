@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: canonical/doc-checker@v1
+      - uses: canonical/discourse-doc-checker@main  # or @v1 once tagged
         with:
           docs-path: 'docs'
           discourse-url: 'https://discourse.charmhub.io'
@@ -105,12 +105,30 @@ Issues are **not created** for successful runs where no differences are found.
 └── README.md        # This file
 ```
 
+## Action References
+
+You can reference this action in different ways:
+
+### Using a specific branch (recommended for development)
+```yaml
+uses: canonical/discourse-doc-checker@main
+```
+
+### Using a specific tag/release (recommended for production)
+```yaml
+uses: canonical/discourse-doc-checker@v1
+```
+
+### Using a specific commit (for maximum stability)
+```yaml
+uses: canonical/discourse-doc-checker@abc1234
+```
+
 ## Setup Instructions
 
-1. **Create new repository** named `doc-checker`
-2. **Add the files** from this directory
-3. **Create a release/tag** (e.g., `v1`)
-4. **Use in other repositories** with `uses: your-org/doc-checker@v1`
+1. **Ensure the repository exists** at `canonical/discourse-doc-checker`
+2. **Create a release/tag** (e.g., `v1`) for stable usage
+3. **Use in other repositories** with the appropriate reference
 
 ## License
 
