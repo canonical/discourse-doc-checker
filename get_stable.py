@@ -3,7 +3,7 @@
 Find the latest promote action and which commit it ran for.
 """
 
-from datetime import datetime
+import sys
 
 import requests
 
@@ -52,27 +52,13 @@ def find_latest_promote_action(repo: str, owner: str = "canonical") -> str | Non
                 promote_runs.append(run)
         
         if not promote_runs:
-            print("❌ No promote workflow runs found")
-            return
+            print("❌ No promote workflow runs found", file=sys.stderr)
+            return None
         
         # Get the latest promote run
         latest_run = promote_runs[0]  # Already sorted by created_at desc
-        
-        print("🚀 Latest Promote Action Found:")
-        print("="*50)
-        print(f"Workflow Name: {latest_run['name']}")
-        print(f"Status: {latest_run['status']}")
-        print(f"Conclusion: {latest_run.get('conclusion', 'N/A')}")
-        print(f"Branch: {latest_run['head_branch']}")
-        print(f"Commit SHA: {latest_run['head_sha']}")
-        print(f"Commit Message: {latest_run.get('display_title', 'N/A')}")
-        
-        created_at = datetime.fromisoformat(latest_run["created_at"].replace("Z", "+00:00"))
-        print(f"Created: {created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        print(f"Run URL: {latest_run['html_url']}")
-        
         return latest_run.get('head_sha')
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching data: {e}")
+        print(f"❌ Error fetching data: {e}", file=sys.stderr)
         return None

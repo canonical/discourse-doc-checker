@@ -469,13 +469,11 @@ def get_stable_commit() -> Optional[str]:
             print("Could not determine repository name for promote action lookup", file=sys.stderr)
             return None
         
-        print(f"Looking for latest promote action in {owner}/{repo_name}...", file=sys.stderr)
         
         # Use the find_latest_promote_action function to get the stable commit
         stable_commit = find_latest_promote_action(repo=repo_name, owner=owner)
         
         if stable_commit:
-            print(f"Found stable commit from promote action: {stable_commit}", file=sys.stderr)
             return stable_commit
         else:
             print("No promote action found or failed to get commit SHA", file=sys.stderr)
