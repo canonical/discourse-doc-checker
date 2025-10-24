@@ -14,9 +14,6 @@ jobs:
       issues: write  # Required for creating issues
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
       - name: Run documentation checker
         uses: canonical/discourse-doc-checker@main  # Use the actual repository name
         with:
