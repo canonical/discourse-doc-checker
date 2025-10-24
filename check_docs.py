@@ -1,13 +1,19 @@
+import argparse
 import difflib
 import glob
 import os
 import re
+import subprocess
+import sys
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
 import yaml
 from mrkdwn_analysis import MarkdownAnalyzer
+
+# Import the stable commit detection function
+from get_stable import find_latest_promote_action
 
 """
 PyYAML
@@ -412,6 +418,74 @@ def get_discourse_url(charm_dir: str) -> Optional[str]:
         return None
 
 
+def get_stable_commit() -> Optional[str]:
+    """
+    Get the commit SHA of the latest stable version by finding the latest promote action.
+    
+    This function uses the find_latest_promote_action to get the commit SHA
+    from the most recent successful promote workflow run.
+    
+    Returns:
+        str: The commit SHA from the latest promote action, or None if not found
+    """
+    try:
+        # Extract repository information from environment or git remote
+        repo_name = None
+        owner = "canonical"  # Default owner
+        
+        # Try to get repository info from environment first
+        if 'GITHUB_REPOSITORY' in os.environ:
+            full_repo = os.environ['GITHUB_REPOSITORY']
+            if '/' in full_repo:
+                owner, repo_name = full_repo.split('/', 1)
+        
+        # If not found in environment, try to get from git remote
+        if not repo_name:
+            try:
+                result = subprocess.run(
+                    ["git", "remote", "get-url", "origin"],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if result.returncode == 0:
+                    remote_url = result.stdout.strip()
+                    # Parse GitHub URL to extract owner/repo
+                    # Handle both SSH and HTTPS URLs
+                    if 'github.com' in remote_url:
+                        if remote_url.startswith('git@github.com:'):
+                            # SSH format: git@github.com:owner/repo.git
+                            repo_part = remote_url.replace('git@github.com:', '').replace('.git', '')
+                        else:
+                            # HTTPS format: https://github.com/owner/repo.git
+                            repo_part = remote_url.replace('https://github.com/', '').replace('.git', '')
+                        
+                        if '/' in repo_part:
+                            owner, repo_name = repo_part.split('/', 1)
+            except Exception:
+                pass
+        
+        if not repo_name:
+            print("Could not determine repository name for promote action lookup", file=sys.stderr)
+            return None
+        
+        print(f"Looking for latest promote action in {owner}/{repo_name}...", file=sys.stderr)
+        
+        # Use the find_latest_promote_action function to get the stable commit
+        stable_commit = find_latest_promote_action(repo=repo_name, owner=owner)
+        
+        if stable_commit:
+            print(f"Found stable commit from promote action: {stable_commit}", file=sys.stderr)
+            return stable_commit
+        else:
+            print("No promote action found or failed to get commit SHA", file=sys.stderr)
+            return None
+            
+    except Exception as e:
+        print(f"Error getting stable commit from promote action: {e}", file=sys.stderr)
+        return None
+
+
 def main():
     """
     Main function to run the diff check.
@@ -469,4 +543,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Check documentation differences between Discourse and local files.')
+    parser.add_argument('--get-stable-commit', action='store_true', 
+                       help='Get the commit SHA of the stable version and exit')
+    
+    args = parser.parse_args()
+    
+    if args.get_stable_commit:
+        stable_commit = get_stable_commit()
+        if stable_commit:
+            print(stable_commit)
+            sys.exit(0)
+        else:
+            print("No stable commit found", file=sys.stderr)
+            sys.exit(1)
+    else:
+        main()

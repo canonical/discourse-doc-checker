@@ -19,7 +19,6 @@ jobs:
   check-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: canonical/discourse-doc-checker@main  # or @v1 once tagged
         with:
           docs-path: 'docs'
@@ -49,7 +48,6 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
       - uses: canonical/discourse-doc-checker@main
         with:
           docs-path: 'docs'
@@ -64,6 +62,38 @@ jobs:
           update-existing-issue: 'true'  # Update existing issues instead of creating duplicates
 ```
 
+### For Using Stable Commit Detection
+```yaml
+name: Documentation Check Against Stable Version
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: canonical/discourse-doc-checker@main
+        with:
+          docs-path: 'docs'
+          discourse-url: 'https://discourse.charmhub.io'
+          discourse-api-key: ${{ secrets.DISCOURSE_API_KEY }}
+          discourse-api-user: ${{ secrets.DISCOURSE_API_USER }}
+          # Use stable commit detection
+          use-stable: 'true'
+          # Issue settings
+          create-issue: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-title: 'Documentation Check Failed - Stable Version'
+          issue-labels: 'documentation'
+          update-existing-issue: 'true'
+```
+
 ## Inputs
 
 | Input | Description | Required | Default |
@@ -73,6 +103,7 @@ jobs:
 | `discourse-api-key` | Discourse API key | No | `` |
 | `discourse-api-user` | Discourse API username | No | `system` |
 | `working-directory` | Working directory | No | `.` |
+| `use-stable` | Use stable commit detection from check_docs script (true/false) | No | `false` |
 | `github-token` | GitHub token for creating issues | No | `` |
 | `create-issue` | Whether to create an issue with the output (true/false) | No | `false` |
 | `issue-title` | Title for the issue to be created | No | `Documentation Check Failed` |
@@ -86,6 +117,23 @@ jobs:
 3. **Reports differences**: Shows detailed diffs when documentation doesn't match
 4. **Fails on differences**: Returns non-zero exit code to fail CI when issues are found
 5. **Creates issues (optional)**: Can automatically create GitHub issues with the check results and detailed output
+6. **Stable commit detection**: Can automatically detect and checkout stable commits for comparison
+
+### Stable Commit Detection
+
+When `use-stable: 'true'` is set, the action will:
+
+1. **Call the check_docs script** with `--get-stable-commit` flag to detect the stable commit
+2. **Checkout the stable commit** automatically before running the documentation check
+3. **Show in issues** which stable commit was used for comparison
+
+The stable commit detection logic uses the latest promote action:
+- **Finds the latest promote workflow**: Searches for completed workflow runs with "promote" in the name
+- **Extracts commit SHA**: Gets the commit SHA that the promote action ran against
+- **Automatic repository detection**: Determines repository name from environment or git remote
+- **GitHub API integration**: Uses GitHub API to find the most recent successful promote action
+
+The implementation uses the `find_latest_promote_action()` function from `get_stable.py` which provides detailed information about the promote action that was found.
 
 ## Example conversion
 

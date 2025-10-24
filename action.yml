@@ -23,6 +23,10 @@ inputs:
     description: 'Working directory'
     required: false
     default: '.'
+  use-stable:
+    description: 'Use stable charm to compare docs for'
+    required: false
+    default: 'true'
   github-token:
     description: 'GitHub token for creating issues'
     required: false
@@ -51,6 +55,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for tag/commit detection
+        
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -61,6 +70,29 @@ runs:
       run: |
         python -m pip install --upgrade pip
         pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Detect and checkout stable commit
+      if: inputs.use-stable == 'true'
+      id: stable-commit
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Detecting stable commit using check_docs script..."
+        
+        # Run the check_docs script to get the stable commit SHA
+        stable_commit=$(python ${{ github.action_path }}/check_docs.py --get-stable-commit 2>/dev/null || echo "")
+        
+        if [[ -n "$stable_commit" && "$stable_commit" != "$(git rev-parse HEAD)" ]]; then
+          echo "Found stable commit: $stable_commit"
+          echo "Checking out stable commit..."
+          git fetch origin "$stable_commit" 2>/dev/null || git fetch --all
+          git checkout "$stable_commit"
+          echo "Successfully checked out stable commit: $(git rev-parse HEAD)"
+          echo "stable_commit=$stable_commit" >> "$GITHUB_OUTPUT"
+        else
+          echo "No stable commit found or already on stable commit, using current state"
+          echo "stable_commit=" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Check if docs directory exists
       id: docs-check
@@ -74,7 +106,7 @@ runs:
           echo "Warning: Documentation directory '${{ inputs.docs-path }}' not found"
         fi
 
-    - name: Run documentation format check
+    - name: Run documentation comparison
       id: doc-check
       if: steps.docs-check.outputs.exists == 'true'
       shell: bash
@@ -86,7 +118,7 @@ runs:
         DOCS_PATH_GLOB: ${{ inputs.docs-path }}
         CHARM_DIR: ${{ inputs.working-directory }}
       run: |
-        echo "Running documentation format check..."
+        echo "Running documentation comparison..."
         
         # Capture output to both stdout and a file
         output_file="${{ runner.temp }}/doc_check_output.txt"
@@ -168,6 +200,7 @@ runs:
         **Repository:** ${{ github.repository }}
         **Branch:** ${{ github.ref_name }}
         **Commit:** ${{ github.sha }}
+        **Stable Commit:** ${{ steps.stable-commit.outputs.stable_commit || 'Not used' }}
         **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         **Issue Type:** $issue_type
         **Status:** ${{ steps.doc-check.outputs.check_result || 'skipped' }}
